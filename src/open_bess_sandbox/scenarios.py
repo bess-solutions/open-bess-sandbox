@@ -1,7 +1,18 @@
 from dataclasses import dataclass
 from typing import Dict, Any, List
+import asyncio
+import time
+
 from .meters import SiteLoadMeter, SolarGenerationMeter
 from .taxonomy import InstallationType, get_standard_rules
+
+try:
+    from open_bess_edge.config import EdgeConfig, parse_config
+    from open_bess_edge.runtime.factory import build_node
+    from open_bess_edge.sim.runner import SimEnvironment
+    EDGE_AVAILABLE = True
+except ImportError:
+    EDGE_AVAILABLE = False
 
 @dataclass
 class SimulationResult:
@@ -15,7 +26,7 @@ class SimulationResult:
     rule_compliance_score_pct: float
 
 class UtilitySSCCSimulator:
-    """Escenario 1: Planta Utility en Transmision prestando FFR + Volt/VAR."""
+    """Escenario 1: Planta Utility en Transmision prestando FFR + Volt/VAR (Modelo simplificado)."""
     def __init__(self, p_nom_kw: float = 1000.0, e_nom_kwh: float = 2000.0):
         self.p_nom = p_nom_kw
         self.e_nom = e_nom_kwh
@@ -33,6 +44,73 @@ class UtilitySSCCSimulator:
             primary_kpi_unit="kW (<500ms)",
             safety_violations=0,
             rule_compliance_score_pct=100.0
+        )
+
+def _build_sandbox_cfg(cycle_ms: int = 100) -> Any:
+    raw = {
+        "node": {"device_id": "sandbox-sscc-node"},
+        "plant": {"p_nominal_kw": 1000.0, "e_nominal_kwh": 2000.0, "v_nominal_v": 400.0},
+        "volt_var": {"q_max_kvar": 600.0},
+        "runtime": {"cycle_ms": cycle_ms, "comm_loss_hold_s": 2.0, "startup_valid_cycles": 3},
+        "health": {"enabled": False},
+    }
+    return parse_config(raw, source="<sandbox>")
+
+class EdgeIntegratedSSCCSimulator:
+    """Escenario 1 Real: Lazo cerrado completo usando el motor y la envolvente de seguridad de Open BESS Edge."""
+    def __init__(self, cycle_ms: int = 100):
+        if not EDGE_AVAILABLE:
+            raise RuntimeError("open_bess_edge no esta instalado en el entorno.")
+        self.cycle_ms = cycle_ms
+
+    async def run_frequency_contingency(self, f_contingency_hz: float = 49.65, duration_s: float = 2.0) -> SimulationResult:
+        cfg = _build_sandbox_cfg(cycle_ms=self.cycle_ms)
+        env = SimEnvironment(cfg, tick_s=0.01)
+        port = await env.start(realtime=True)
+        node = build_node(cfg, host="127.0.0.1", port=port)
+        started = await node.start()
+        if not started:
+            await env.stop()
+            raise RuntimeError("No se pudo iniciar el nodo Open BESS Edge.")
+
+        task = asyncio.ensure_future(node.run())
+        setpoints_written = []
+        try:
+            # Esperar arranque y validacion inicial de ciclos
+            await asyncio.sleep(0.4)
+            # Aplicar contingencia de frecuencia
+            env.plant.f_hz = f_contingency_hz
+            t_start = time.monotonic()
+            
+            while time.monotonic() - t_start < duration_s:
+                await asyncio.sleep(0.05)
+                # Inspeccionar logs de escritura del servidor simulado
+                for t, addr, vals in env.server.write_log:
+                    if addr == 200 and vals != [0]:
+                        setpoints_written.append((t, vals[0]))
+            
+            # Restaurar frecuencia
+            env.plant.f_hz = 50.0
+            await asyncio.sleep(0.2)
+        finally:
+            node.request_stop()
+            await task
+            await node.stop()
+            await env.stop()
+
+        max_p_kw = max([p for _, p in setpoints_written], default=0.0)
+        max_p_kw = float(max_p_kw)
+        energy_kwh = (max_p_kw * duration_s) / 3600.0
+
+        return SimulationResult(
+            context_type=InstallationType.UTILITY_SSCC,
+            energy_discharged_kwh=round(energy_kwh, 3),
+            energy_charged_kwh=0.0,
+            peak_metric="Respuesta FFR Lazo Cerrado Edge Real",
+            primary_kpi_value=round(max_p_kw, 1),
+            primary_kpi_unit="kW inyectados en lazo cerrado",
+            safety_violations=node.metrics.trips,
+            rule_compliance_score_pct=100.0 if len(setpoints_written) > 0 else 0.0
         )
 
 class GeneratorFirmSimulator:
@@ -98,25 +176,21 @@ class BTMPeakShavingSimulator:
 
 class FreeClientArbitrageSimulator:
     """Escenario 4: Arbitraje horario PPA / Precio marginal."""
-    def __init__(self, p_bess_kw: float = 500.0, e_nom_kwh: float = 1000.0, eta_rt: float = 0.90):
+    def __init__(self, p_bess_kw: float = 500.0, e_bess_kwh: float = 1000.0):
         self.p_bess_kw = p_bess_kw
-        self.e_nom_kwh = e_nom_kwh
-        self.eta_rt = eta_rt
+        self.e_bess_kwh = e_bess_kwh
 
     def run_daily_arbitrage(self) -> SimulationResult:
-        charge_kwh = min(self.e_nom_kwh * 0.8, self.p_bess_kw * 4.0)
-        cost_charge_usd = charge_kwh * 0.015
-        discharge_kwh = charge_kwh * self.eta_rt
-        revenue_discharge_usd = discharge_kwh * 0.110
-        net_spread_usd = revenue_discharge_usd - cost_charge_usd
+        solar_soak_kwh = self.p_bess_kw * 2.0
+        evening_discharge_kwh = min(solar_soak_kwh * 0.9, self.e_bess_kwh * 0.85)
 
         return SimulationResult(
             context_type=InstallationType.FREE_CLIENT_ARBITRAGE,
-            energy_discharged_kwh=round(discharge_kwh, 1),
-            energy_charged_kwh=round(charge_kwh, 1),
-            peak_metric="Margen Neto Arbitraje",
-            primary_kpi_value=round(net_spread_usd, 2),
-            primary_kpi_unit="USD/dia",
+            energy_discharged_kwh=round(evening_discharge_kwh, 1),
+            energy_charged_kwh=round(solar_soak_kwh, 1),
+            peak_metric="Arbitraje Solar-Punta",
+            primary_kpi_value=round(evening_discharge_kwh, 1),
+            primary_kpi_unit="kWh desplazados",
             safety_violations=0,
             rule_compliance_score_pct=100.0
         )

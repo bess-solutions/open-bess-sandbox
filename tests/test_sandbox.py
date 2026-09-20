@@ -19,23 +19,20 @@ from open_bess_sandbox.scenarios import (
 )
 from open_bess_sandbox.compare_runner import run_all_parallel
 
-def test_taxonomy_fail_closed_on_commercial_assumptions():
-    """Reglas en SUPUESTO (como arbitraje PPA no mandatado por norma tecnica) fallan closed si no se autorizan."""
-    rules = get_standard_rules(InstallationType.FREE_CLIENT_ARBITRAGE)
-    statuses = {r.status for r in rules}
-    assert RegulatoryStatus.SUPUESTO in statuses
-    assert RegulatoryStatus.EN_EVALUACION in statuses
-
-    ctx = InstallationContext(
-        installation_type=InstallationType.FREE_CLIENT_ARBITRAGE,
-        site_id="SITE-SANTIAGO-01",
-        connection_point="Barra 12 kV Distribucion",
-        command_authority=CommandAuthority.BESSAI_OPTIMIZER,
-        rules=rules,
-        allow_experimental_rules=False
-    )
-    with pytest.raises(ValueError, match="[Nn]o puede ejecutarse en modo productivo"):
-        ctx.validate_fail_closed()
+def test_taxonomy_fail_closed_on_unverified_assumptions():
+    """Reglas en SUPUESTO o EN_EVALUACION fallan closed por defecto en modo productivo."""
+    for inst_type in [InstallationType.UTILITY_SSCC, InstallationType.BTM_PEAK_SHAVING, InstallationType.FREE_CLIENT_ARBITRAGE]:
+        rules = get_standard_rules(inst_type)
+        ctx = InstallationContext(
+            installation_type=inst_type,
+            site_id="SITE-TEST-01",
+            connection_point="Barra de Prueba",
+            command_authority=CommandAuthority.PLANT_OPERATOR,
+            rules=rules,
+            allow_experimental_rules=False
+        )
+        with pytest.raises(ValueError, match="[Nn]o puede ejecutarse en modo productivo"):
+            ctx.validate_fail_closed()
 
 def test_taxonomy_passes_when_experimental_allowed():
     rules = get_standard_rules(InstallationType.FREE_CLIENT_ARBITRAGE)
@@ -49,18 +46,18 @@ def test_taxonomy_passes_when_experimental_allowed():
     )
     assert ctx.validate_fail_closed() is True
 
-def test_utility_sscc_rules_are_officially_vigente():
+def test_utility_sscc_rules_documented_as_supuesto():
     rules = get_standard_rules(InstallationType.UTILITY_SSCC)
     assert len(rules) == 2
     for r in rules:
-        assert r.status == RegulatoryStatus.VIGENTE
-        assert "Res. Ex. CNE" in r.legal_basis or "Resolucion Exenta" in r.legal_basis
+        assert r.status == RegulatoryStatus.SUPUESTO
+        assert "Res. Ex. CNE" in r.legal_basis
 
-def test_btm_peak_shaving_rules_reference_tariffs():
+def test_btm_peak_shaving_rules_documented():
     rules = get_standard_rules(InstallationType.BTM_PEAK_SHAVING)
     assert len(rules) == 2
     for r in rules:
-        assert r.status == RegulatoryStatus.VIGENTE
+        assert r.status == RegulatoryStatus.SUPUESTO
         assert r.requires_site_meter is True
     assert any("Precios de Nudo Promedio" in r.legal_basis for r in rules)
 

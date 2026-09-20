@@ -37,7 +37,10 @@ class InstallationContext(BaseModel):
     allow_experimental_rules: bool = False
 
     def validate_fail_closed(self) -> bool:
-        """Valida que ninguna regla que sea SUPUESTO o EN_EVALUACION se ejecute sin autorizacion explicita."""
+        """
+        Valida que ninguna regla clasificada como SUPUESTO o EN_EVALUACION
+        se ejecute en modo productivo sin autorizacion explicita.
+        """
         for rule in self.rules:
             if rule.status != RegulatoryStatus.VIGENTE and not self.allow_experimental_rules:
                 raise ValueError(
@@ -47,22 +50,29 @@ class InstallationContext(BaseModel):
         return True
 
 def get_standard_rules(inst_type: InstallationType) -> List[RegulatoryRule]:
+    """
+    Retorna el conjunto de reglas para cada contexto.
+    NOTA DE AUDITORIA: Todas las referencias normativas que no cuenten con
+    auditoria legal independiente certificada se clasifican preventivamente
+    como SUPUESTO, garantizando que el sistema falle cerrado (fail-closed)
+    a menos que el operador desbloquee expresamente el modo de simulacion.
+    """
     if inst_type == InstallationType.UTILITY_SSCC:
         return [
             RegulatoryRule(
                 rule_id="NTSYCS-FFR-01",
                 description="Respuesta rapida de frecuencia contingente (<500ms)",
                 norm_reference="NTSyCS Anexo Tecnico Control de Frecuencia",
-                legal_basis="Resolucion Exenta CNE N° 151/2020 modificada, Capitulo 5 (Reserva Primaria de Frecuencia)",
-                status=RegulatoryStatus.VIGENTE,
+                legal_basis="Res. Ex. CNE N° 151/2020 Cap. 5 (Pendiente de verificacion legal independiente)",
+                status=RegulatoryStatus.SUPUESTO,
                 min_soc_reserve_pct=30.0,
             ),
             RegulatoryRule(
                 rule_id="NTSYCS-VV-01",
                 description="Soporte dinamico Volt/VAR en barra de conexion",
                 norm_reference="NTSyCS Control de Tension y Potencia Reactiva",
-                legal_basis="Resolucion Exenta CNE N° 151/2020, Capitulo 3, Art. 3-8",
-                status=RegulatoryStatus.VIGENTE,
+                legal_basis="Res. Ex. CNE N° 151/2020 Cap. 3 Art. 3-8 (Pendiente de verificacion legal independiente)",
+                status=RegulatoryStatus.SUPUESTO,
                 min_soc_reserve_pct=10.0,
             ),
         ]
@@ -70,10 +80,10 @@ def get_standard_rules(inst_type: InstallationType) -> List[RegulatoryRule]:
         return [
             RegulatoryRule(
                 rule_id="LEY21505-FIRM-01",
-                description="Inyeccion garantizada en bloque crepuscular/nocturno para suficiencia de potencia",
+                description="Inyeccion en bloque crepuscular/nocturno para suficiencia de potencia",
                 norm_reference="Ley N° 21.505 de Almacenamiento y Electromovilidad",
-                legal_basis="Ley 21.505 (DO 21.11.2022), modifica Art. 149° bis de la Ley General de Servicios Electricos (LGSE)",
-                status=RegulatoryStatus.VIGENTE,
+                legal_basis="Ley 21.505 modifica Art. 149° bis LGSE (Pendiente de verificacion legal independiente)",
+                status=RegulatoryStatus.SUPUESTO,
                 min_soc_reserve_pct=50.0,
             ),
         ]
@@ -83,17 +93,17 @@ def get_standard_rules(inst_type: InstallationType) -> List[RegulatoryRule]:
                 rule_id="TARIFF-PEAK-01",
                 description="Control y recorte de demanda maxima leida en horas de punta del sistema (18:00 a 22:00 hrs)",
                 norm_reference="Tarifas de Suministro Electrico / Cargos por Potencia de Punta (LGSE Art. 182)",
-                legal_basis="Decretos de Formulas Tarifarias de Distribucion y Precios de Nudo Promedio (PNP) CNE (Horas de punta abril-septiembre)",
-                status=RegulatoryStatus.VIGENTE,
+                legal_basis="Decretos de Formulas Tarifarias y Precios de Nudo Promedio (PNP) CNE (Pendiente de verificacion legal)",
+                status=RegulatoryStatus.SUPUESTO,
                 requires_site_meter=True,
                 min_soc_reserve_pct=15.0,
             ),
             RegulatoryRule(
                 rule_id="NTCO-ZERO-EXPORT-01",
                 description="Inyeccion cero hacia la red de distribucion en modo autoconsumo sin contrato PMGD",
-                norm_reference="Norma Tecnica de Conexion y Operacion de PMGD / Pliego Tecnico Normativo RPTD",
-                legal_basis="Res. Ex. CNE N° 166 y Pliegos RPTD N° 01 a 15 de la Superintendencia de Electricidad y Combustibles (SEC)",
-                status=RegulatoryStatus.VIGENTE,
+                norm_reference="Norma Tecnica de Conexion y Operacion de PMGD / Pliegos RPTD SEC",
+                legal_basis="Res. Ex. CNE N° 166 y Pliegos RPTD SEC (Pendiente de verificacion legal independiente)",
+                status=RegulatoryStatus.SUPUESTO,
                 requires_site_meter=True,
                 min_soc_reserve_pct=10.0,
             ),
@@ -113,7 +123,7 @@ def get_standard_rules(inst_type: InstallationType) -> List[RegulatoryRule]:
                 rule_id="BTM-GRID-SUPPORT-EXP",
                 description="Soporte y alivio de congestion local en redes de distribucion BTM remunerado",
                 norm_reference="Propuesta Reglamentaria de Flexibilidad y Servicios de Red CNE",
-                legal_basis="Agenda Regulatoria CNE 2024-2026 (En proceso de consulta y tramitacion reglamentaria)",
+                legal_basis="Agenda Regulatoria CNE 2024-2026 (En tramite reglamentario)",
                 status=RegulatoryStatus.EN_EVALUACION,
                 min_soc_reserve_pct=25.0,
             ),

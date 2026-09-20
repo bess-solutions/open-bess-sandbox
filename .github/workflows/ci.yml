@@ -6,7 +6,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  unit:
+    name: Unit Tests (Standalone)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -17,5 +18,20 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: pytest
+      - run: pytest -v
       - run: python -m open_bess_sandbox.compare_runner
+
+  integration:
+    name: Full Closed-Loop Integration with Open BESS Edge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install sandbox with dev dependencies
+        run: pip install -e ".[dev]"
+      - name: Install Open BESS Edge from official v3.0.0 release tag
+        run: pip install "git+https://github.com/bess-solutions/open-bess-edge.git@v3.0.0"
+      - name: Run closed-loop integration test (must NOT be skipped)
+        run: pytest -v -k test_edge_integrated_closed_loop_sscc

@@ -80,10 +80,10 @@ def get_standard_rules(inst_type: InstallationType) -> List[RegulatoryRule]:
     elif inst_type == InstallationType.BTM_PEAK_SHAVING:
         return [
             RegulatoryRule(
-                rule_id="DS11T-PEAK-01",
-                description="Control y recorte de demanda maxima en horas de punta ST/T (18:00 a 22:00)",
-                norm_reference="Decreto Supremo N° 11T/2016 CNE - Peajes de Transmision",
-                legal_basis="DS N° 11T Ministerio de Energia, Art. 48 y resoluciones tarifarias CNE semestrales",
+                rule_id="TARIFF-PEAK-01",
+                description="Control y recorte de demanda maxima leida en horas de punta del sistema (18:00 a 22:00 hrs)",
+                norm_reference="Tarifas de Suministro Electrico / Cargos por Potencia de Punta (LGSE Art. 182)",
+                legal_basis="Decretos de Formulas Tarifarias de Distribucion y Precios de Nudo Promedio (PNP) CNE (Horas de punta abril-septiembre)",
                 status=RegulatoryStatus.VIGENTE,
                 requires_site_meter=True,
                 min_soc_reserve_pct=15.0,

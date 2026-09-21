@@ -24,7 +24,7 @@ Para resolver esto sin perder universalidad, la arquitectura desacopla:
 | **Mediciones Requeridas** | $ (Hz), $ (kV) en barra; $, $ de planta | Generación bruta ERNC, capacidad de línea de evacuación | **Medidor de Carga de Fábrica ({load}, Q_{load}$)** | Medidor de consumo + Señal horaria de tarifa |
 | **Lazos de Control Activos** | FFR Droop (rápido) + Volt/VAR NTSyCS | Seguidor de rampa + Rellenado de valles (Peak Shift) | Recorte de demanda sobre umbral ({grid} \le P_{cap}$) | Despacho programado / Optimizador de precios |
 | **Reserva de SOC** | Reserva dinámica simétrica (~50% o según SSCC) | Reserva alta previa a bloque de inyección programada | SOC alto antes de las 18:00 h (inicio punta) | SOC flexible según curva horaria de precios |
-| **Estado Regulatorio** | **Vigente** (NTSyCS Anexo Técnico CEN) | **Vigente** (Ley 21.505 / Norma Técnica ERNC) | **Vigente** (DS 11T / DS 8T Tarifas Potencia) | **Mixto** (Vigente PPA / En evaluación SSCC BTM) |
+| **Estado Regulatorio en Código** | **SUPUESTO** (NTSYCS-FFR-01 / NTSYCS-VV-01) | **SUPUESTO** (LEY21505-FIRM-01 / NTCO-ZERO-EXPORT-01) | **SUPUESTO** (TARIFF-PEAK-01: Art. 182° LGSE / PNP) | **SUPUESTO / EN_EVALUACION** (PPA-ARBITRAGE-01 / BTM-FLEX-01) |
 
 ---
 
@@ -49,7 +49,7 @@ Para resolver esto sin perder universalidad, la arquitectura desacopla:
 - **Gestión de SOC**: La reserva de energía no se descarga aleatoriamente durante el día; se preserva para el bloque contractual comprometido.
 
 ### Contexto 3: Detrás del Medidor (Behind-The-Meter, BTM Industrial - Peak Shaving)
-- **Marco Normativo**: Decreto Supremo N° 11T / 8T (Estructura tarifaria de cargos por potencia en horas de punta), Norma Técnica de Distribución.
+- **Marco Normativo**: Art. 182° Ley General de Servicios Eléctricos (LGSE), Decretos semestrales de Precios de Nudo Promedio (PNP) de la CNE y Decretos de Fórmulas Tarifarias de Distribución (horas punta 18:00–22:00 de abril a septiembre).
 - **Autoridad de Mando**: EMS local del cliente o agente de optimización edge.
 - **Obligaciones de Control**:
   - **Medidor Externo Obligatorio**: Requiere lectura en tiempo real del medidor de carga general de la planta industrial ({load}$).

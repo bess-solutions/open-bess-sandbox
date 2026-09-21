@@ -23,12 +23,12 @@ Este sandbox evalúa y demuestra la **arquitectura en tres capas**:
 
 Consulta la especificación completa en [docs/TAXONOMY_CHILE.md](docs/TAXONOMY_CHILE.md).
 
-| Contexto | Quién comanda | Objetivo Primario | Medición Requerida | Estado Regulatorio |
+| Contexto | Quién comanda | Objetivo Primario | Medición Requerida | Estado Regulatorio en Código |
 |---|---|---|---|---|
-| **1. Utility-Scale SSCC** | Coordinador Eléctrico Nacional (CEN) | FFR sub-500ms + Volt/VAR | $f, V$ en subestación | **Vigente** (NTSyCS) |
-| **2. Respaldo Generación** | Operador Central + Despacho CEN | Mitigar vertimiento solar e inyectar de noche | Medidor de generación solar bruta | **Vigente** (Ley 21.505) |
-| **3. Peak Shaving BTM** | EMS Cliente Industrial / BESSAI | Recortar demanda en horas punta (18-22h) | **Medidor de Carga de Fábrica ($P_{load}$)** | **Vigente** (DS 11T / 8T) |
-| **4. Cliente Libre Arbitraje** | Orquestador BESSAI / Cliente | Arbitraje horario de compra de energía | Medidor de consumo + Tarifa horaria | **Mixto** (PPA vigente / Flexibilidad en eval.) |
+| **1. Utility-Scale SSCC** | Coordinador Eléctrico Nacional (CEN) | FFR sub-500ms + Volt/VAR | $f, V$ en subestación | **SUPUESTO** (NTSYCS-FFR-01 / NTSYCS-VV-01) |
+| **2. Respaldo Generación** | Operador Central + Despacho CEN | Mitigar vertimiento solar e inyectar de noche | Medidor de generación solar bruta | **SUPUESTO** (LEY21505-FIRM-01 / NTCO-ZERO-EXPORT-01) |
+| **3. Peak Shaving BTM** | EMS Cliente Industrial / BESSAI | Recortar demanda en horas punta (18-22h) | **Medidor de Carga de Fábrica ($P_{load}$)** | **SUPUESTO** (TARIFF-PEAK-01: Art. 182° LGSE) |
+| **4. Cliente Libre Arbitraje** | Orquestador BESSAI / Cliente | Arbitraje horario de compra de energía | Medidor de consumo + Tarifa horaria | **SUPUESTO / EN_EVALUACION** (PPA / Flex) |
 
 ---
 

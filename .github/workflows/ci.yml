@@ -32,6 +32,6 @@ jobs:
       - name: Install sandbox with dev dependencies
         run: pip install -e ".[dev]"
       - name: Install Open BESS Edge from official v3.0.0 release tag
-        run: pip install "git+https://github.com/bess-solutions/open-bess-edge.git@v3.0.0"
+        run: pip install "git+https://github.com/bess-solutions/open-bess-edge.git@v3.1.0"
       - name: Run closed-loop integration test (must NOT be skipped)
-        run: pytest -v -k test_edge_integrated_closed_loop_sscc
+        run: pytest -v -k "test_edge_integrated"

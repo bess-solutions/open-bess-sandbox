@@ -174,6 +174,120 @@ class BTMPeakShavingSimulator:
             rule_compliance_score_pct=100.0
         )
 
+
+def _build_btm_sandbox_cfg(
+    p_bess_kw: float = 1000.0,
+    e_bess_kwh: float = 2000.0,
+    max_grid_import_kw: float = 1200.0,
+    soc_reserve_pct: float = 20.0,
+    cycle_ms: int = 100,
+):
+    raw = {
+        "node": {"device_id": "sandbox-btm-node"},
+        "plant": {"p_nominal_kw": p_bess_kw, "e_nominal_kwh": e_bess_kwh, "v_nominal_v": 400.0},
+        "volt_var": {"mode": "DISABLED"},
+        "installation": {
+            "role": "btm_peak_shaving",
+            "constraints": {
+                "max_grid_import_kw": max_grid_import_kw,
+                "max_grid_export_kw": 0.0,
+                "soc_reserve_pct": soc_reserve_pct,
+                "p_grid_timeout_s": 2.0,
+            },
+            "dispatch_sources": [{"type": "http_bearer"}],
+            "metadata": {
+                "policy_compiler": "open-bess-sandbox",
+                "rule_set_id": "CL-PEAK-TARIFF-2026",
+                "status": "SUPUESTO",
+            },
+            "accept_unverified_rule_set": True,
+        },
+        "grid_meter": {"port": 1502},
+        "runtime": {"cycle_ms": cycle_ms, "comm_loss_hold_s": 2.0, "startup_valid_cycles": 3},
+        "health": {"enabled": False},
+    }
+    return parse_config(raw, source="<sandbox-btm>")
+
+
+class EdgeIntegratedBTMPeakShavingSimulator:
+    """Escenario 3 Real: Lazo cerrado completo de Peak Shaving BTM usando el modulo de instalacion de Open BESS Edge."""
+    def __init__(
+        self,
+        p_bess_kw: float = 1000.0,
+        e_bess_kwh: float = 2000.0,
+        max_grid_import_kw: float = 1200.0,
+        soc_reserve_pct: float = 20.0,
+        cycle_ms: int = 100,
+    ):
+        if not EDGE_AVAILABLE:
+            raise RuntimeError("open_bess_edge no esta instalado en el entorno.")
+        self.p_bess_kw = p_bess_kw
+        self.e_bess_kwh = e_bess_kwh
+        self.max_grid_import_kw = max_grid_import_kw
+        self.soc_reserve_pct = soc_reserve_pct
+        self.cycle_ms = cycle_ms
+
+    async def run_peak_event(self, site_load_kw: float = 1500.0, duration_s: float = 1.5) -> SimulationResult:
+        cfg = _build_btm_sandbox_cfg(
+            p_bess_kw=self.p_bess_kw,
+            e_bess_kwh=self.e_bess_kwh,
+            max_grid_import_kw=self.max_grid_import_kw,
+            soc_reserve_pct=self.soc_reserve_pct,
+            cycle_ms=self.cycle_ms,
+        )
+        env = SimEnvironment(cfg, tick_s=0.01)
+        port = await env.start(realtime=True)
+        node = build_node(
+            cfg,
+            host="127.0.0.1",
+            port=port,
+            meter_host="127.0.0.1",
+            meter_port=env.meter_port,
+        )
+        started = await node.start()
+        if not started:
+            await env.stop()
+            raise RuntimeError("No se pudo iniciar el nodo Open BESS Edge para BTM Peak Shaving.")
+
+        task = asyncio.ensure_future(node.run())
+        setpoints_written = []
+        try:
+            # Esperar sincronización y validación de arranque
+            await asyncio.sleep(0.4)
+            # Aplicar demanda industrial en punta (escalón de carga en el sitio)
+            env.plant.site_load_kw = site_load_kw
+            t_start = time.monotonic()
+
+            while time.monotonic() - t_start < duration_s:
+                await asyncio.sleep(0.05)
+                for t, addr, vals in env.server.write_log:
+                    if addr == 200 and vals != [0]:
+                        setpoints_written.append((t, vals[0]))
+
+            # Normalizar carga a nivel base
+            env.plant.site_load_kw = self.max_grid_import_kw * 0.8
+            await asyncio.sleep(0.2)
+        finally:
+            node.request_stop()
+            await task
+            await node.stop()
+            await env.stop()
+
+        max_p_kw = max([p for _, p in setpoints_written], default=0.0)
+        max_p_kw = float(max_p_kw)
+        energy_kwh = (max_p_kw * duration_s) / 3600.0
+
+        return SimulationResult(
+            context_type=InstallationType.BTM_PEAK_SHAVING,
+            energy_discharged_kwh=round(energy_kwh, 3),
+            energy_charged_kwh=0.0,
+            peak_metric="Recorte Demanda Lazo Cerrado Edge Real",
+            primary_kpi_value=round(max_p_kw, 1),
+            primary_kpi_unit="kW inyectados en lazo cerrado",
+            safety_violations=node.metrics.trips,
+            rule_compliance_score_pct=100.0 if len(setpoints_written) > 0 else 0.0,
+        )
+
 class FreeClientArbitrageSimulator:
     """Escenario 4: Arbitraje horario PPA / Precio marginal."""
     def __init__(self, p_bess_kw: float = 500.0, e_bess_kwh: float = 1000.0):

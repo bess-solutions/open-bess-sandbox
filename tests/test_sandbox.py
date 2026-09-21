@@ -100,3 +100,24 @@ async def test_edge_integrated_closed_loop_sscc():
     assert res.primary_kpi_value > 0.0
     assert res.safety_violations == 0
     assert res.rule_compliance_score_pct == 100.0
+
+
+@pytest.mark.asyncio
+async def test_edge_integrated_closed_loop_btm_peak_shaving():
+    """Valida la ejecucion de peak shaving BTM de punta a punta importando el motor real de open-bess-edge v3.1."""
+    if not EDGE_AVAILABLE:
+        pytest.skip("open_bess_edge no esta instalado en este entorno de pruebas")
+    from open_bess_sandbox.scenarios import EdgeIntegratedBTMPeakShavingSimulator
+    sim = EdgeIntegratedBTMPeakShavingSimulator(
+        p_bess_kw=1000.0,
+        e_bess_kwh=2000.0,
+        max_grid_import_kw=1200.0,
+        soc_reserve_pct=20.0,
+        cycle_ms=100,
+    )
+    res = await sim.run_peak_event(site_load_kw=1500.0, duration_s=1.2)
+    assert res.context_type == InstallationType.BTM_PEAK_SHAVING
+    # El sitio demanda 1500 kW con max_import=1200 kW -> BESS inyecta ~300 kW
+    assert res.primary_kpi_value >= 250.0
+    assert res.safety_violations == 0
+    assert res.rule_compliance_score_pct == 100.0
